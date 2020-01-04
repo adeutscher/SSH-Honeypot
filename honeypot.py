@@ -1,6 +1,6 @@
 #!/usr/bin/env python2.7
 import socket, sys, threading
-import csv, time
+import csv, getopt, time
 import paramiko
 
 if sys.version_info.major == 2 :
@@ -11,6 +11,38 @@ HOST_KEY = paramiko.RSAKey(filename='server.key')
 SSH_PORT = 2222
 LOGFILE = 'logins.txt' #File to log the user:password combinations to
 LOGFILE_LOCK = threading.Lock()
+
+class ArgWrapper(object):
+
+    def __init__(self):
+        # Set defaults
+        self.port = SSH_PORT
+
+    def process(self, args):
+        if args == sys.argv:
+             args = args[1:]
+
+        good = True
+
+        try:
+            options, operands = getopt.gnu_getopt(args,"p:")
+            for opt, value in options:
+
+                if opt == "-p":
+                    try:
+                        temp_port = int(value)
+                        if temp_port > 0 and temp_port < 65536:
+                            self.port = temp_port
+                        else:
+                            print("Invalid port number (must be in range 1-65535): %d")
+                    except ValueError:
+                        print("Invalid port number (could not parse number): %d")
+
+        except Exception as e:
+            print("Error processing arguments: %s" % e)
+            good = False
+
+        return good
 
 class SSHServerHandler (paramiko.ServerInterface):
     def __init__(self, addr):
@@ -48,11 +80,15 @@ def handleConnection(addr, client):
     if not channel is None:
         channel.close()
 
-def main():
+def main(args):
     try:
+
+        # Announce options
+        print("Port: %d" % args.port)
+
         server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        server_socket.bind(('', SSH_PORT))
+        server_socket.bind(('', args.port))
         server_socket.listen(100)
 
         paramiko.util.log_to_file ('paramiko.log')
@@ -77,6 +113,9 @@ def main():
 
 if __name__ == '__main__':
     try:
-        main()
+        arg_wrapper = ArgWrapper()
+        if not arg_wrapper.process(sys.argv):
+            exit(1)
+        main(arg_wrapper)
     except KeyboardInterrupt:
         exit(130)
