@@ -1,6 +1,6 @@
 #!/usr/bin/env python2.7
 import socket, sys, threading
-import csv
+import csv, time
 import paramiko
 
 if sys.version_info.major == 2 :
@@ -24,7 +24,7 @@ class SSHServerHandler (paramiko.ServerInterface):
             print("New login from %s:self.port: %s : %s" % (self.addr, self.port, username, password))
             with open(LOGFILE,"a") as logfile_handle:
                 writer = csv.writer(logfile_handle)
-                writer.writerow([self.addr, self.port, username, password])
+                writer.writerow([int(time.time()), self.addr, self.port, username, password])
         finally:
             LOGFILE_LOCK.release()
         return paramiko.AUTH_FAILED
