@@ -70,10 +70,13 @@ def main():
                     sys.exit(1)
             except Exception as e:
                 print("ERROR handling client: %s" % e)
-
     except Exception as e:
         print("ERROR: Failed to create socket")
         print(e)
         sys.exit(1)
 
-main()
+if __name__ == '__main__':
+    try:
+        main()
+    except KeyboardInterrupt:
+        exit(130)
