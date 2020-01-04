@@ -29,7 +29,6 @@ class SSHServerHandler (paramiko.ServerInterface):
             LOGFILE_LOCK.release()
         return paramiko.AUTH_FAILED
 
-
     def get_allowed_auths(self, username):
         return 'password'
 
@@ -39,7 +38,11 @@ def handleConnection(addr, client):
 
     server_handler = SSHServerHandler(addr)
 
-    transport.start_server(server=server_handler)
+    try:
+        transport.start_server(server=server_handler)
+    except EOFError:
+        # TODO: Option for logging instances of this?
+        return # End of input - port scan?
 
     channel = transport.accept(1)
     if not channel is None:
