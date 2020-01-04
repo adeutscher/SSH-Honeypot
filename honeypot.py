@@ -73,8 +73,10 @@ def handleConnection(addr, client):
     try:
         transport.start_server(server=server_handler)
     except EOFError:
+        # End of input came earlier than expected
+        # This has been observed to happen because of a port scan
         # TODO: Option for logging instances of this?
-        return # End of input - port scan?
+        return
 
     channel = transport.accept(1)
     if not channel is None:
