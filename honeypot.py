@@ -21,7 +21,7 @@ class SSHServerHandler (paramiko.ServerInterface):
     def check_auth_password(self, username, password):
         LOGFILE_LOCK.acquire()
         try:
-            print("New login from %s:self.port: %s : %s" % (self.addr, self.port, username, password))
+            print("New login from %s:%d: %s : %s" % (self.addr, self.port, username, password))
             with open(LOGFILE,"a") as logfile_handle:
                 writer = csv.writer(logfile_handle)
                 writer.writerow([int(time.time()), self.addr, self.port, username, password])
