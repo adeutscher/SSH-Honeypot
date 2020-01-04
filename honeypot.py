@@ -1,5 +1,6 @@
 #!/usr/bin/env python2.7
 import socket, sys, threading
+import csv
 import paramiko
 
 if sys.version_info.major == 2 :
@@ -12,16 +13,18 @@ LOGFILE = 'logins.txt' #File to log the user:password combinations to
 LOGFILE_LOCK = threading.Lock()
 
 class SSHServerHandler (paramiko.ServerInterface):
-    def __init__(self):
+    def __init__(self, addr):
         self.event = threading.Event()
+        self.addr = addr[0]
+        self.port = addr[1]
 
     def check_auth_password(self, username, password):
         LOGFILE_LOCK.acquire()
         try:
-            logfile_handle = open(LOGFILE,"a")
-            print("New login: " + username + ":" + password)
-            logfile_handle.write(username + ":" + password + "\n")
-            logfile_handle.close()
+            print("New login from %s:self.port: %s : %s" % (self.addr, self.port, username, password))
+            with open(LOGFILE,"a") as logfile_handle:
+                writer = csv.writer(logfile_handle)
+                writer.writerow([self.addr, self.port, username, password])
         finally:
             LOGFILE_LOCK.release()
         return paramiko.AUTH_FAILED
@@ -30,11 +33,11 @@ class SSHServerHandler (paramiko.ServerInterface):
     def get_allowed_auths(self, username):
         return 'password'
 
-def handleConnection(client):
+def handleConnection(addr, client):
     transport = paramiko.Transport(client)
     transport.add_server_key(HOST_KEY)
 
-    server_handler = SSHServerHandler()
+    server_handler = SSHServerHandler(addr)
 
     transport.start_server(server=server_handler)
 
@@ -49,15 +52,15 @@ def main():
         server_socket.bind(('', SSH_PORT))
         server_socket.listen(100)
 
-        paramiko.util.log_to_file ('paramiko.log') 
+        paramiko.util.log_to_file ('paramiko.log')
 
         while(True):
             try:
                 client_socket, client_addr = server_socket.accept()
                 if sys.version_info.major == 2 :
-                    thread.start_new_thread(handleConnection,(client_socket,))
+                    thread.start_new_thread(handleConnection,(client_addr,client_socket,))
                 elif sys.version_info.major == 3 :
-                    t = threading.Thread(target=handleConnection, args=(client_socket,))
+                    t = threading.Thread(target=handleConnection, args=(client_addr,client_socket,))
                     t.start()
                 else :
                     print("Unknown python major version %d, exiting." % sys.version_info.major)
