@@ -7,10 +7,9 @@ if sys.version_info.major == 2 :
     import thread
 
 #generate keys with 'ssh-keygen -t rsa -f server.key'
-HOST_KEY = paramiko.RSAKey(filename='server.key')
 SSH_PORT = 2222
-LOGFILE = 'logins.txt' #File to log the user:password combinations to
-LOGFILE_LOCK = threading.Lock()
+LOGFILE = 'logins.txt' # File to log the user:password combinations to
+HOST_KEY_PATH = 'server.key'
 
 class ArgWrapper(object):
 
@@ -25,18 +24,27 @@ class ArgWrapper(object):
         good = True
 
         try:
-            options, operands = getopt.gnu_getopt(args,"p:")
+            options, operands = getopt.gnu_getopt(args,"hp:")
+
             for opt, value in options:
 
-                if opt == "-p":
+                if opt == "-h":
+
+                    print("Usage: ./honeypot.py [-h] [-p port]")
+                    exit(0)
+
+                elif opt == "-p":
+
                     try:
                         temp_port = int(value)
                         if temp_port > 0 and temp_port < 65536:
                             self.port = temp_port
                         else:
                             print("Invalid port number (must be in range 1-65535): %d")
+                            good = False
                     except ValueError:
                         print("Invalid port number (could not parse number): %d")
+                        good = False
 
         except Exception as e:
             print("Error processing arguments: %s" % e)
@@ -118,6 +126,10 @@ if __name__ == '__main__':
         arg_wrapper = ArgWrapper()
         if not arg_wrapper.process(sys.argv):
             exit(1)
+
+        HOST_KEY = paramiko.RSAKey(filename=HOST_KEY_PATH)
+        LOGFILE_LOCK = threading.Lock()
+
         main(arg_wrapper)
     except KeyboardInterrupt:
         exit(130)
