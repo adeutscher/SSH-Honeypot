@@ -30,12 +30,12 @@ class ArgWrapper(object):
 
             for opt, value in options:
 
-                if opt == "-h":
+                if opt == '-h':
 
                     print('Usage: ./honeypot.py [-h] [-p port]')
                     exit(0)
 
-                elif opt == "-p":
+                elif opt == '-p':
 
                     try:
                         temp_port = int(value)
