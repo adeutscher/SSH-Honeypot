@@ -7,6 +7,7 @@
 logins.txt
 server.key
 server.pub
+server.key.pub
 paramiko.log
 
 ### Python ###
