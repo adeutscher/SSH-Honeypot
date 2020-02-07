@@ -1,12 +1,14 @@
 #!/usr/bin/env python2.7
 import socket, sys, threading
 import csv, getopt, time
+
 import paramiko
+from paramiko.ssh_exception import SSHException
 
 if sys.version_info.major == 2 :
     import thread
 
-#generate keys with 'ssh-keygen -t rsa -f server.key'
+#generate keys with 'ssh-keygen -t rsa -m pem -f server.key'
 SSH_PORT = 2222
 LOGFILE = 'logins.txt' # File to log the user:password combinations to
 HOST_KEY_PATH = 'server.key'
@@ -126,7 +128,11 @@ if __name__ == '__main__':
         if not arg_wrapper.process(sys.argv):
             exit(1)
 
-        HOST_KEY = paramiko.RSAKey(filename=HOST_KEY_PATH)
+        try:
+            HOST_KEY = paramiko.RSAKey(filename=HOST_KEY_PATH)
+        except (IOError, SSHException) as e:
+            print('Problem loading RSA key file "%s": %s' % (HOST_KEY_PATH, e))
+            exit(1)
         LOGFILE_LOCK = threading.Lock()
 
         main(arg_wrapper)
