@@ -24,13 +24,13 @@ class ArgWrapper(object):
         good = True
 
         try:
-            options, operands = getopt.gnu_getopt(args,"hp:")
+            options, operands = getopt.gnu_getopt(args,'hp:')
 
             for opt, value in options:
 
                 if opt == "-h":
 
-                    print("Usage: ./honeypot.py [-h] [-p port]")
+                    print('Usage: ./honeypot.py [-h] [-p port]')
                     exit(0)
 
                 elif opt == "-p":
@@ -40,14 +40,14 @@ class ArgWrapper(object):
                         if temp_port > 0 and temp_port < 65536:
                             self.port = temp_port
                         else:
-                            print("Invalid port number (must be in range 1-65535): %d")
+                            print('Invalid port number (must be in range 1-65535):', temp_port)
                             good = False
                     except ValueError:
-                        print("Invalid port number (could not parse number): %d")
+                        print('Invalid port number (could not parse number):', value)
                         good = False
 
         except Exception as e:
-            print("Error processing arguments: %s" % e)
+            print('Error processing arguments:', e)
             good = False
 
         return good
@@ -61,7 +61,7 @@ class SSHServerHandler (paramiko.ServerInterface):
     def check_auth_password(self, username, password):
         LOGFILE_LOCK.acquire()
         try:
-            print("New login from %s:%d: %s : %s" % (self.addr, self.port, username, password))
+            print('New login from %s:%d: %s : %s' % (self.addr, self.port, username, password))
             with open(LOGFILE,"a") as logfile_handle:
                 writer = csv.writer(logfile_handle)
                 writer.writerow([int(time.time()), self.addr, self.port, username, password])
@@ -94,7 +94,7 @@ def main(args):
     try:
 
         # Announce options
-        print("Port: %d" % args.port)
+        print('Port:', args.port)
 
         server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -112,13 +112,12 @@ def main(args):
                     t = threading.Thread(target=handleConnection, args=(client_addr,client_socket,))
                     t.start()
                 else :
-                    print("Unknown python major version %d, exiting." % sys.version_info.major)
+                    print('Unknown python major version %d, exiting.' % sys.version_info.major)
                     sys.exit(1)
             except Exception as e:
-                print("ERROR handling client: %s" % e)
+                print('ERROR handling client:', e)
     except Exception as e:
-        print("ERROR: Failed to create socket")
-        print(e)
+        print('ERROR: Failed to create socket:', e)
         sys.exit(1)
 
 if __name__ == '__main__':
