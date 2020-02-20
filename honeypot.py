@@ -74,8 +74,13 @@ class SSHServerHandler (paramiko.ServerInterface):
     def get_allowed_auths(self, username):
         return 'password'
 
+class Transport(paramiko.Transport):
+    def set_server_version_string(self, new_version):
+        # Based off of paramiko.Transport.__init__
+        self.local_version = "SSH-" + self._PROTO_ID + "-" + new_version
+
 def handleConnection(addr, client):
-    transport = paramiko.Transport(client)
+    transport = Transport(client)
     transport.add_server_key(HOST_KEY)
 
     server_handler = SSHServerHandler(addr)
