@@ -115,7 +115,7 @@ class HoneyPotWrapper:
 
         return good
 
-    def handleConnection(self, addr, client):
+    def handle_connection(self, addr, client):
         transport = Transport(client)
         transport.add_server_key(self.HOST_KEY)
         transport.set_server_version_string(self.args.version)
@@ -153,9 +153,9 @@ class HoneyPotWrapper:
                 try:
                     client_socket, client_addr = server_socket.accept()
                     if sys.version_info.major == 2 :
-                        thread.start_new_thread(handleConnection,(client_addr,client_socket,))
+                        thread.start_new_thread(self.handle_connection,(client_addr,client_socket,))
                     elif sys.version_info.major == 3 :
-                        t = threading.Thread(target=self.handleConnection, args=(client_addr,client_socket,))
+                        t = threading.Thread(target=self.handle_connection, args=(client_addr,client_socket,))
                         t.start()
                     else :
                         print('Unknown python major version: %d' % sys.version_info.major)
