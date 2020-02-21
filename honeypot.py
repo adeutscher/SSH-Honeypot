@@ -18,6 +18,8 @@ class ArgWrapper(object):
     def __init__(self):
         # Set defaults
         self.port = SSH_PORT
+        self.delay = 2
+        self.version = 'OpenSSH_8.1'
 
     def process(self, args):
         if args == sys.argv:
@@ -26,13 +28,23 @@ class ArgWrapper(object):
         good = True
 
         try:
-            options, operands = getopt.gnu_getopt(args,'hp:')
+            options, operands = getopt.gnu_getopt(args,'d:hp:s:')
 
             for opt, value in options:
 
-                if opt == '-h':
+                if opt == '-d':
 
-                    print('Usage: ./honeypot.py [-h] [-p port]')
+                    try:
+                        self.delay = float(value)
+
+                        if self.delay < 0: raise ValueError()
+                    except ValueError:
+                        print('Invalid delay value: ', value)
+                        good = False
+
+                elif opt == '-h':
+
+                    print('Usage: ./honeypot.py [-d delay-seconds] [-h] [-p port]')
                     exit(0)
 
                 elif opt == '-p':
@@ -48,6 +60,10 @@ class ArgWrapper(object):
                         print('Invalid port number (could not parse number):', value)
                         good = False
 
+                elif opt == '-s':
+
+                    if value: self.version = value
+
         except Exception as e:
             print('Error processing arguments:', e)
             good = False
@@ -55,20 +71,24 @@ class ArgWrapper(object):
         return good
 
 class SSHServerHandler (paramiko.ServerInterface):
-    def __init__(self, addr):
+    def __init__(self, addr, wrapper):
         self.event = threading.Event()
         self.addr = addr[0]
         self.port = addr[1]
+        self.wrapper = wrapper
 
     def check_auth_password(self, username, password):
-        LOGFILE_LOCK.acquire()
+        self.wrapper.lock.acquire()
         try:
             print('New login from %s:%d: %s : %s' % (self.addr, self.port, username, password))
             with open(LOGFILE,"a") as logfile_handle:
                 writer = csv.writer(logfile_handle)
                 writer.writerow([int(time.time()), self.addr, self.port, username, password])
         finally:
-            LOGFILE_LOCK.release()
+            self.wrapper.lock.release()
+
+        time.sleep(self.wrapper.args.delay)
+
         return paramiko.AUTH_FAILED
 
     def get_allowed_auths(self, username):
@@ -79,67 +99,80 @@ class Transport(paramiko.Transport):
         # Based off of paramiko.Transport.__init__
         self.local_version = "SSH-" + self._PROTO_ID + "-" + new_version
 
-def handleConnection(addr, client):
-    transport = Transport(client)
-    transport.add_server_key(HOST_KEY)
+class HoneyPotWrapper:
+    def __init__(self):
+        self.args = ArgWrapper()
 
-    server_handler = SSHServerHandler(addr)
+    def init(self):
+        good = self.args.process(sys.argv)
+        try:
+            self.HOST_KEY = paramiko.RSAKey(filename=HOST_KEY_PATH)
+        except (IOError, SSHException) as e:
+            print('Problem loading RSA key file "%s": %s' % (HOST_KEY_PATH, e))
+            good = False
 
-    try:
-        transport.start_server(server=server_handler)
-    except EOFError:
-        # End of input came earlier than expected
-        # This has been observed to happen because of a port scan
-        # TODO: Option for logging instances of this?
-        return
+        self.lock = threading.Lock()
 
-    channel = transport.accept(1)
-    if not channel is None:
-        channel.close()
+        return good
 
-def main(args):
-    try:
+    def handleConnection(self, addr, client):
+        transport = Transport(client)
+        transport.add_server_key(self.HOST_KEY)
+        transport.set_server_version_string(self.args.version)
+
+        server_handler = SSHServerHandler(addr, self)
+
+        try:
+            transport.start_server(server=server_handler)
+        except EOFError:
+            # End of input came earlier than expected
+            # This has been observed to happen because of a port scan
+            # TODO: Option for logging instances of this?
+            return
+
+        channel = transport.accept(1)
+        if not channel is None:
+            channel.close()
+
+    def run(self):
 
         # Announce options
-        print('Port:', args.port)
+        print('Port:', self.args.port)
+        print('Fail Delay: %0.2fs' % self.args.delay)
 
-        server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        server_socket.bind(('', args.port))
-        server_socket.listen(100)
+        try:
 
-        paramiko.util.log_to_file ('paramiko.log')
+            server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            server_socket.bind(('', self.args.port))
+            server_socket.listen(100)
 
-        while(True):
-            try:
-                client_socket, client_addr = server_socket.accept()
-                if sys.version_info.major == 2 :
-                    thread.start_new_thread(handleConnection,(client_addr,client_socket,))
-                elif sys.version_info.major == 3 :
-                    t = threading.Thread(target=handleConnection, args=(client_addr,client_socket,))
-                    t.start()
-                else :
-                    print('Unknown python major version %d, exiting.' % sys.version_info.major)
-                    sys.exit(1)
-            except Exception as e:
-                print('ERROR handling client:', e)
-    except Exception as e:
-        print('ERROR: Failed to create socket:', e)
-        sys.exit(1)
+            paramiko.util.log_to_file ('paramiko.log')
+
+            while(True):
+                try:
+                    client_socket, client_addr = server_socket.accept()
+                    if sys.version_info.major == 2 :
+                        thread.start_new_thread(handleConnection,(client_addr,client_socket,))
+                    elif sys.version_info.major == 3 :
+                        t = threading.Thread(target=self.handleConnection, args=(client_addr,client_socket,))
+                        t.start()
+                    else :
+                        print('Unknown python major version: %d' % sys.version_info.major)
+                        return 1
+                except Exception as e:
+                    print('ERROR handling client:', e)
+        except Exception as e:
+            print('ERROR: Failed to create socket:', e)
+            return 1
 
 if __name__ == '__main__':
     try:
-        arg_wrapper = ArgWrapper()
-        if not arg_wrapper.process(sys.argv):
-            exit(1)
+        wrapper = HoneyPotWrapper()
 
-        try:
-            HOST_KEY = paramiko.RSAKey(filename=HOST_KEY_PATH)
-        except (IOError, SSHException) as e:
-            print('Problem loading RSA key file "%s": %s' % (HOST_KEY_PATH, e))
-            exit(1)
-        LOGFILE_LOCK = threading.Lock()
+        if not wrapper.init(): exit(1)
 
-        main(arg_wrapper)
+        exit(wrapper.run())
     except KeyboardInterrupt:
+        print('')
         exit(130)
