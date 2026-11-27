@@ -79,6 +79,8 @@ class ArgWrapper(object):
         self.para_log = False
         self.max_connections = 100
         self.max_per_ip = 5
+        self.max_attempts = 6 # Matches OpenSSH's default MaxAuthTries
+        self.max_lifetime = 120 # Seconds
 
     def _parse_positive_int(self, value, label):
         try:
@@ -96,11 +98,16 @@ class ArgWrapper(object):
         good = True
 
         try:
-            options, operands = getopt.gnu_getopt(args,'c:d:hi:lp:s:')
+            options, operands = getopt.gnu_getopt(args,'a:c:d:hi:lp:s:t:')
 
             for opt, value in options:
 
-                if opt == '-c':
+                if opt == '-a':
+                    number = self._parse_positive_int(value, 'attempt limit')
+                    if number is None: good = False
+                    else: self.max_attempts = number
+
+                elif opt == '-c':
                     number = self._parse_positive_int(value, 'connection limit')
                     if number is None: good = False
                     else: self.max_connections = number
@@ -117,7 +124,7 @@ class ArgWrapper(object):
 
                 elif opt == '-h':
 
-                    print('Usage: ./honeypot.py [-c max-connections] [-d delay-seconds] [-h] [-i max-per-ip] [-l] [-p port] [-s version]')
+                    print('Usage: ./honeypot.py [-a max-attempts] [-c max-connections] [-d delay-seconds] [-h] [-i max-per-ip] [-l] [-p port] [-s version] [-t max-lifetime-seconds]')
                     exit(0)
 
                 elif opt == '-i':
@@ -144,6 +151,11 @@ class ArgWrapper(object):
 
                     if value: self.version = value
 
+                elif opt == '-t':
+                    number = self._parse_positive_int(value, 'connection lifetime')
+                    if number is None: good = False
+                    else: self.max_lifetime = number
+
         except Exception as e:
             print('Error processing arguments:', e)
             good = False
@@ -156,11 +168,17 @@ class SSHServerHandler (paramiko.ServerInterface):
         self.addr = addr[0]
         self.port = addr[1]
         self.wrapper = wrapper
+        self.attempts = 0
 
     def check_auth_password(self, username, password):
         self.log_attempt(username, password)
+        self.attempts += 1
 
-        time.sleep(self.wrapper.args.delay)
+        if self.attempts >= self.wrapper.args.max_attempts:
+            # Signal handle_connection to drop the client.
+            self.event.set()
+        else:
+            time.sleep(self.wrapper.args.delay)
 
         return paramiko.AUTH_FAILED
 
@@ -230,29 +248,40 @@ class HoneyPotWrapper:
             self._release_slot(addr[0])
 
     def handle_connection(self, addr, client):
-        transport = Transport(client)
-        transport.add_server_key(self.HOST_KEY)
-        transport.set_server_version_string(self.args.version)
-
-        server_handler = SSHServerHandler(addr, self)
-
+        transport = None
         try:
-            transport.start_server(server=server_handler)
-        except EOFError:
-            # End of input came earlier than expected
-            # This has been observed to happen because of a port scan
-            # TODO: Option for logging instances of this?
-            return
+            transport = Transport(client)
+            transport.add_server_key(self.HOST_KEY)
+            transport.set_server_version_string(self.args.version)
 
-        channel = transport.accept(1)
-        if not channel is None:
-            channel.close()
+            server_handler = SSHServerHandler(addr, self)
+            deadline = time.time() + self.args.max_lifetime
+
+            try:
+                transport.start_server(server=server_handler)
+            except (EOFError, SSHException):
+                # Negotiation failed or input ended early.
+                # This has been observed to happen because of a port scan.
+                # TODO: Option for logging instances of this?
+                return
+
+            # Keep the client around until it leaves, uses up its attempts, or runs out of time.
+            while transport.is_active():
+                remaining = deadline - time.time()
+                if remaining <= 0 or server_handler.event.wait(min(remaining, 1)):
+                    break
+        finally:
+            if transport is not None:
+                transport.close()
+            client.close()
 
     def run(self):
 
         # Announce options
         print_notice('Port: %d' % self.args.port)
         print_notice('Fail Delay: %0.2fs' % self.args.delay)
+        print_notice('Attempts Per Connection: %d' % self.args.max_attempts)
+        print_notice('Max Connection Lifetime: %ds' % self.args.max_lifetime)
         print_notice('Connection Limits: %d total, %d per IP' % (self.args.max_connections, self.args.max_per_ip))
 
         try:
