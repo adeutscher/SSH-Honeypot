@@ -5,9 +5,6 @@ import csv, getopt, time
 import paramiko
 from paramiko.ssh_exception import SSHException
 
-if sys.version_info.major == 2 :
-    import thread
-
 #generate keys with 'ssh-keygen -t rsa -m pem -f server.key'
 SSH_PORT = 2222
 LOGFILE = 'logins.csv' # File to log the user:password combinations to
@@ -80,6 +77,17 @@ class ArgWrapper(object):
         self.delay = 2
         self.version = 'OpenSSH_8.1'
         self.para_log = False
+        self.max_connections = 100
+        self.max_per_ip = 5
+
+    def _parse_positive_int(self, value, label):
+        try:
+            number = int(value)
+            if number < 1: raise ValueError()
+            return number
+        except ValueError:
+            print_error('Invalid %s (must be a positive integer): %s' % (label, value))
+            return None
 
     def process(self, args):
         if args == sys.argv:
@@ -88,11 +96,16 @@ class ArgWrapper(object):
         good = True
 
         try:
-            options, operands = getopt.gnu_getopt(args,'d:hlp:s:')
+            options, operands = getopt.gnu_getopt(args,'c:d:hi:lp:s:')
 
             for opt, value in options:
 
-                if opt == '-d':
+                if opt == '-c':
+                    number = self._parse_positive_int(value, 'connection limit')
+                    if number is None: good = False
+                    else: self.max_connections = number
+
+                elif opt == '-d':
 
                     try:
                         self.delay = float(value)
@@ -104,8 +117,13 @@ class ArgWrapper(object):
 
                 elif opt == '-h':
 
-                    print('Usage: ./honeypot.py [-d delay-seconds] [-h] [-l] [-p port]')
+                    print('Usage: ./honeypot.py [-c max-connections] [-d delay-seconds] [-h] [-i max-per-ip] [-l] [-p port] [-s version]')
                     exit(0)
+
+                elif opt == '-i':
+                    number = self._parse_positive_int(value, 'per-IP connection limit')
+                    if number is None: good = False
+                    else: self.max_per_ip = number
 
                 elif opt == '-l':
                     self.para_log = False
@@ -178,7 +196,38 @@ class HoneyPotWrapper:
 
         self.lock = threading.Lock()
 
+        # Connection tracking, guarded by its own lock.
+        self.conn_lock = threading.Lock()
+        self.active_total = 0
+        self.active_per_ip = {}
+
         return good
+
+    def _reserve_slot(self, ip):
+        # Returns True if a new connection from this IP is within limits.
+        with self.conn_lock:
+            if self.active_total >= self.args.max_connections:
+                return False
+            if self.active_per_ip.get(ip, 0) >= self.args.max_per_ip:
+                return False
+            self.active_total += 1
+            self.active_per_ip[ip] = self.active_per_ip.get(ip, 0) + 1
+            return True
+
+    def _release_slot(self, ip):
+        with self.conn_lock:
+            self.active_total -= 1
+            remaining = self.active_per_ip.get(ip, 1) - 1
+            if remaining > 0:
+                self.active_per_ip[ip] = remaining
+            else:
+                self.active_per_ip.pop(ip, None)
+
+    def _run_connection(self, addr, client):
+        try:
+            self.handle_connection(addr, client)
+        finally:
+            self._release_slot(addr[0])
 
     def handle_connection(self, addr, client):
         transport = Transport(client)
@@ -204,6 +253,7 @@ class HoneyPotWrapper:
         # Announce options
         print_notice('Port: %d' % self.args.port)
         print_notice('Fail Delay: %0.2fs' % self.args.delay)
+        print_notice('Connection Limits: %d total, %d per IP' % (self.args.max_connections, self.args.max_per_ip))
 
         try:
 
@@ -220,14 +270,18 @@ class HoneyPotWrapper:
             while(True):
                 try:
                     client_socket, client_addr = server_socket.accept()
-                    if sys.version_info.major == 2 :
-                        thread.start_new_thread(self.handle_connection,(client_addr,client_socket,))
-                    elif sys.version_info.major == 3 :
-                        t = threading.Thread(target=self.handle_connection, args=(client_addr,client_socket,))
+                    if not self._reserve_slot(client_addr[0]):
+                        # Over a limit, drop the connection without starting SSH.
+                        client_socket.close()
+                        continue
+                    try:
+                        t = threading.Thread(target=self._run_connection, args=(client_addr,client_socket,))
+                        t.daemon = True
                         t.start()
-                    else :
-                        print_error('Unknown python major version: %d' % sys.version_info.major)
-                        return 1
+                    except Exception:
+                        self._release_slot(client_addr[0])
+                        client_socket.close()
+                        raise
                 except Exception as e:
                     print_error('Handling client: %s' % e)
         except Exception as e:
