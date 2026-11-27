@@ -5,17 +5,22 @@ import csv, getopt, time
 import paramiko
 from paramiko.ssh_exception import SSHException
 
-#generate keys with 'ssh-keygen -t rsa -m pem -f server.key'
+# generate keys with 'ssh-keygen -t rsa -m pem -f server.key'
 SSH_PORT = 2222
-LOGFILE = 'logins.csv' # File to log the user:password combinations to
+LOGFILE = 'logins.csv'  # File to log the user:password combinations to
 HOST_KEY_PATH = 'server.key'
 
+
 def _print_message(header_colour, header_text, message, stderr=False):
-    f=sys.stdout
+    f = sys.stdout
     if stderr:
-        f=sys.stderr
-    header = "%s[%s]:" % (colour_text(header_text, header_colour), colour_text(time.strftime("%Y-%m-%d %k:%M:%S")))
+        f = sys.stderr
+    header = "%s[%s]:" % (
+        colour_text(header_text, header_colour),
+        colour_text(time.strftime("%Y-%m-%d %k:%M:%S")),
+    )
     print(header, message, file=f)
+
 
 def colour_addr(ip, port, host=None):
     msg = '%s:%s' % (colour_blue(ip), colour_text(port))
@@ -25,7 +30,10 @@ def colour_addr(ip, port, host=None):
 
     return msg
 
-def colour_blue(text): return colour_text(text, COLOUR_BLUE) # Lazy shorthand
+
+def colour_blue(text):
+    return colour_text(text, COLOUR_BLUE)  # Lazy shorthand
+
 
 def escape_text(value):
     # Make attacker-supplied text safe to print to a terminal.
@@ -34,6 +42,7 @@ def escape_text(value):
     if isinstance(value, bytes):
         value = value.decode('utf-8', 'backslashreplace')
     return ''.join(c if c.isprintable() else repr(c)[1:-1] for c in value)
+
 
 def csv_safe(value):
     # Stop spreadsheet apps from treating attacker-supplied text as a formula.
@@ -44,13 +53,15 @@ def csv_safe(value):
         return "'" + value
     return value
 
-def colour_text(text, colour = None):
+
+def colour_text(text, colour=None):
     if not colour:
         colour = COLOUR_BOLD
     # A useful shorthand for applying a colour to a string.
     return "%s%s%s" % (colour, text, COLOUR_OFF)
 
-def enable_colours(force = False):
+
+def enable_colours(force=False):
     global COLOUR_RED
     global COLOUR_YELLOW
     global COLOUR_BLUE
@@ -70,15 +81,26 @@ def enable_colours(force = False):
         COLOUR_BLUE = ''
         COLOUR_BOLD = ''
         COLOUR_OFF = ''
+
+
 enable_colours()
 
-def print_attempt(msg): _print_message(COLOUR_YELLOW, "Attempt", msg)
 
-def print_error(msg): _print_message(COLOUR_RED, "Error", msg)
+def print_attempt(msg):
+    _print_message(COLOUR_YELLOW, "Attempt", msg)
 
-def print_notice(msg): _print_message(COLOUR_BLUE, "Notice", msg)
 
-def print_warning(msg): _print_message(COLOUR_YELLOW, "Warning", msg)
+def print_error(msg):
+    _print_message(COLOUR_RED, "Error", msg)
+
+
+def print_notice(msg):
+    _print_message(COLOUR_BLUE, "Notice", msg)
+
+
+def print_warning(msg):
+    _print_message(COLOUR_YELLOW, "Warning", msg)
+
 
 class ArgWrapper(object):
 
@@ -92,13 +114,14 @@ class ArgWrapper(object):
         self.para_log = False
         self.max_connections = 100
         self.max_per_ip = 5
-        self.max_attempts = 6 # Matches OpenSSH's default MaxAuthTries
-        self.max_lifetime = 120 # Seconds
+        self.max_attempts = 6  # Matches OpenSSH's default MaxAuthTries
+        self.max_lifetime = 120  # Seconds
 
     def _parse_positive_int(self, value, label):
         try:
             number = int(value)
-            if number < 1: raise ValueError()
+            if number < 1:
+                raise ValueError()
             return number
         except ValueError:
             print_error('Invalid %s (must be a positive integer): %s' % (label, value))
@@ -106,19 +129,21 @@ class ArgWrapper(object):
 
     def process(self, args):
         if args == sys.argv:
-             args = args[1:]
+            args = args[1:]
 
         good = True
 
         try:
-            options, operands = getopt.gnu_getopt(args,'a:b:c:d:hi:lp:s:t:')
+            options, operands = getopt.gnu_getopt(args, 'a:b:c:d:hi:lp:s:t:')
 
             for opt, value in options:
 
                 if opt == '-a':
                     number = self._parse_positive_int(value, 'attempt limit')
-                    if number is None: good = False
-                    else: self.max_attempts = number
+                    if number is None:
+                        good = False
+                    else:
+                        self.max_attempts = number
 
                 elif opt == '-b':
                     family = None
@@ -130,7 +155,10 @@ class ArgWrapper(object):
                         except (OSError, ValueError):
                             pass
                     if family is None:
-                        print_error('Invalid bind address (must be an IPv4 or IPv6 address): %s' % value)
+                        print_error(
+                            'Invalid bind address (must be an IPv4 or IPv6 address): %s'
+                            % value
+                        )
                         good = False
                     else:
                         self.bind = value
@@ -138,28 +166,35 @@ class ArgWrapper(object):
 
                 elif opt == '-c':
                     number = self._parse_positive_int(value, 'connection limit')
-                    if number is None: good = False
-                    else: self.max_connections = number
+                    if number is None:
+                        good = False
+                    else:
+                        self.max_connections = number
 
                 elif opt == '-d':
 
                     try:
                         self.delay = float(value)
 
-                        if self.delay < 0: raise ValueError()
+                        if self.delay < 0:
+                            raise ValueError()
                     except ValueError:
                         print_error('Invalid delay value: %s' % value)
                         good = False
 
                 elif opt == '-h':
 
-                    print('Usage: ./honeypot.py [-a max-attempts] [-b bind-address] [-c max-connections] [-d delay-seconds] [-h] [-i max-per-ip] [-l] [-p port] [-s version] [-t max-lifetime-seconds]')
+                    print(
+                        'Usage: ./honeypot.py [-a max-attempts] [-b bind-address] [-c max-connections] [-d delay-seconds] [-h] [-i max-per-ip] [-l] [-p port] [-s version] [-t max-lifetime-seconds]'
+                    )
                     exit(0)
 
                 elif opt == '-i':
                     number = self._parse_positive_int(value, 'per-IP connection limit')
-                    if number is None: good = False
-                    else: self.max_per_ip = number
+                    if number is None:
+                        good = False
+                    else:
+                        self.max_per_ip = number
 
                 elif opt == '-l':
                     self.para_log = True
@@ -170,20 +205,28 @@ class ArgWrapper(object):
                         if temp_port > 0 and temp_port < 65536:
                             self.port = temp_port
                         else:
-                            print_error('Invalid port number (must be in range 1-65535): %s' % temp_port)
+                            print_error(
+                                'Invalid port number (must be in range 1-65535): %s'
+                                % temp_port
+                            )
                             good = False
                     except ValueError:
-                        print_error('Invalid port number (could not parse number): %s' % value)
+                        print_error(
+                            'Invalid port number (could not parse number): %s' % value
+                        )
                         good = False
 
                 elif opt == '-s':
 
-                    if value: self.version = value
+                    if value:
+                        self.version = value
 
                 elif opt == '-t':
                     number = self._parse_positive_int(value, 'connection lifetime')
-                    if number is None: good = False
-                    else: self.max_lifetime = number
+                    if number is None:
+                        good = False
+                    else:
+                        self.max_lifetime = number
 
         except Exception as e:
             print('Error processing arguments:', e)
@@ -191,7 +234,8 @@ class ArgWrapper(object):
 
         return good
 
-class SSHServerHandler (paramiko.ServerInterface):
+
+class SSHServerHandler(paramiko.ServerInterface):
     def __init__(self, addr, wrapper):
         self.event = threading.Event()
         self.addr = addr[0]
@@ -215,21 +259,38 @@ class SSHServerHandler (paramiko.ServerInterface):
         return 'password'
 
     def log_attempt(self, username, password):
-        print_attempt('%s: %s : "%s"' % (colour_addr(self.addr, self.port), escape_text(username), escape_text(password)))
+        print_attempt(
+            '%s: %s : "%s"'
+            % (
+                colour_addr(self.addr, self.port),
+                escape_text(username),
+                escape_text(password),
+            )
+        )
         self.wrapper.lock.acquire()
         try:
             # Captured passwords may be real ones, so only the owner may read the log.
             fd = os.open(LOGFILE, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
             with os.fdopen(fd, "a", newline='') as logfile_handle:
                 writer = csv.writer(logfile_handle)
-                writer.writerow([int(time.time()), self.addr, self.port, csv_safe(username), csv_safe(password)])
+                writer.writerow(
+                    [
+                        int(time.time()),
+                        self.addr,
+                        self.port,
+                        csv_safe(username),
+                        csv_safe(password),
+                    ]
+                )
         finally:
             self.wrapper.lock.release()
+
 
 class Transport(paramiko.Transport):
     def set_server_version_string(self, new_version):
         # Based off of paramiko.Transport.__init__
         self.local_version = "SSH-" + self._PROTO_ID + "-" + new_version
+
 
 class HoneyPotWrapper:
     def __init__(self):
@@ -249,7 +310,10 @@ class HoneyPotWrapper:
         try:
             mode = os.stat(LOGFILE).st_mode
             if mode & (stat.S_IRWXG | stat.S_IRWXO):
-                print_warning('Log file "%s" is accessible to other users (mode %s). Consider: chmod 600 %s' % (LOGFILE, oct(stat.S_IMODE(mode)), LOGFILE))
+                print_warning(
+                    'Log file "%s" is accessible to other users (mode %s). Consider: chmod 600 %s'
+                    % (LOGFILE, oct(stat.S_IMODE(mode)), LOGFILE)
+                )
         except OSError:
             pass
 
@@ -317,8 +381,12 @@ class HoneyPotWrapper:
     def run(self):
 
         if hasattr(os, 'geteuid') and os.geteuid() == 0:
-            print_warning('Running as root. A bug in this script or paramiko would give an attacker root access.')
-            print_warning('Run as an unprivileged user and redirect port 22 with iptables instead (see README).')
+            print_warning(
+                'Running as root. A bug in this script or paramiko would give an attacker root access.'
+            )
+            print_warning(
+                'Run as an unprivileged user and redirect port 22 with iptables instead (see README).'
+            )
 
         # Announce options
         print_notice('Bind Address: %s' % self.args.bind)
@@ -326,7 +394,10 @@ class HoneyPotWrapper:
         print_notice('Fail Delay: %0.2fs' % self.args.delay)
         print_notice('Attempts Per Connection: %d' % self.args.max_attempts)
         print_notice('Max Connection Lifetime: %ds' % self.args.max_lifetime)
-        print_notice('Connection Limits: %d total, %d per IP' % (self.args.max_connections, self.args.max_per_ip))
+        print_notice(
+            'Connection Limits: %d total, %d per IP'
+            % (self.args.max_connections, self.args.max_per_ip)
+        )
 
         try:
 
@@ -340,7 +411,7 @@ class HoneyPotWrapper:
                 print_notice('Paramiko logging to file: %s' % paramiko_log)
                 paramiko.util.log_to_file(paramiko_log)
 
-            while(True):
+            while True:
                 try:
                     client_socket, client_addr = server_socket.accept()
                     if not self._reserve_slot(client_addr[0]):
@@ -348,7 +419,13 @@ class HoneyPotWrapper:
                         client_socket.close()
                         continue
                     try:
-                        t = threading.Thread(target=self._run_connection, args=(client_addr,client_socket,))
+                        t = threading.Thread(
+                            target=self._run_connection,
+                            args=(
+                                client_addr,
+                                client_socket,
+                            ),
+                        )
                         t.daemon = True
                         t.start()
                     except Exception:
@@ -361,11 +438,13 @@ class HoneyPotWrapper:
             print_error('Failed to create socket: %s' % e)
             return 1
 
+
 if __name__ == '__main__':
     try:
         wrapper = HoneyPotWrapper()
 
-        if not wrapper.init(): exit(1)
+        if not wrapper.init():
+            exit(1)
 
         exit(wrapper.run())
     except KeyboardInterrupt:
