@@ -162,7 +162,7 @@ class ArgWrapper(object):
                     else: self.max_per_ip = number
 
                 elif opt == '-l':
-                    self.para_log = False
+                    self.para_log = True
                 elif opt == '-p':
 
                     try:
@@ -337,7 +337,7 @@ class HoneyPotWrapper:
 
             if self.args.para_log:
                 paramiko_log = 'paramiko.log'
-                print_notice('Paramoko logging to file: %s' % paramiko_log)
+                print_notice('Paramiko logging to file: %s' % paramiko_log)
                 paramiko.util.log_to_file(paramiko_log)
 
             while(True):
