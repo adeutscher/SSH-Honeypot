@@ -78,6 +78,8 @@ def print_error(msg): _print_message(COLOUR_RED, "Error", msg)
 
 def print_notice(msg): _print_message(COLOUR_BLUE, "Notice", msg)
 
+def print_warning(msg): _print_message(COLOUR_YELLOW, "Warning", msg)
+
 class ArgWrapper(object):
 
     def __init__(self):
@@ -247,7 +249,7 @@ class HoneyPotWrapper:
         try:
             mode = os.stat(LOGFILE).st_mode
             if mode & (stat.S_IRWXG | stat.S_IRWXO):
-                print_notice('Log file "%s" is accessible to other users (mode %s). Consider: chmod 600 %s' % (LOGFILE, oct(stat.S_IMODE(mode)), LOGFILE))
+                print_warning('Log file "%s" is accessible to other users (mode %s). Consider: chmod 600 %s' % (LOGFILE, oct(stat.S_IMODE(mode)), LOGFILE))
         except OSError:
             pass
 
@@ -313,6 +315,10 @@ class HoneyPotWrapper:
             client.close()
 
     def run(self):
+
+        if hasattr(os, 'geteuid') and os.geteuid() == 0:
+            print_warning('Running as root. A bug in this script or paramiko would give an attacker root access.')
+            print_warning('Run as an unprivileged user and redirect port 22 with iptables instead (see README).')
 
         # Announce options
         print_notice('Bind Address: %s' % self.args.bind)
