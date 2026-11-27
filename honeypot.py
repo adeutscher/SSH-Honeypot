@@ -35,6 +35,15 @@ def escape_text(value):
         value = value.decode('utf-8', 'backslashreplace')
     return ''.join(c if c.isprintable() else repr(c)[1:-1] for c in value)
 
+def csv_safe(value):
+    # Stop spreadsheet apps from treating attacker-supplied text as a formula.
+    # A leading quote is the usual OWASP-recommended neutralizer.
+    if isinstance(value, bytes):
+        value = value.decode('utf-8', 'backslashreplace')
+    if value and value[0] in ('=', '+', '-', '@', '\t', '\r'):
+        return "'" + value
+    return value
+
 def colour_text(text, colour = None):
     if not colour:
         colour = COLOUR_BOLD
@@ -191,7 +200,7 @@ class SSHServerHandler (paramiko.ServerInterface):
         try:
             with open(LOGFILE,"a") as logfile_handle:
                 writer = csv.writer(logfile_handle)
-                writer.writerow([int(time.time()), self.addr, self.port, username, password])
+                writer.writerow([int(time.time()), self.addr, self.port, csv_safe(username), csv_safe(password)])
         finally:
             self.wrapper.lock.release()
 
