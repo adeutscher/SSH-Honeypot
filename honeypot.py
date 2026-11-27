@@ -229,9 +229,9 @@ class HoneyPotWrapper:
                         print_error('Unknown python major version: %d' % sys.version_info.major)
                         return 1
                 except Exception as e:
-                    print_error('Handling client:', e)
+                    print_error('Handling client: %s' % e)
         except Exception as e:
-            print_error('Failed to create socket:', e)
+            print_error('Failed to create socket: %s' % e)
             return 1
 
 if __name__ == '__main__':
