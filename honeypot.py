@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-import socket, sys, threading
+import os, socket, stat, sys, threading
 import csv, getopt, time
 
 import paramiko
@@ -198,7 +198,9 @@ class SSHServerHandler (paramiko.ServerInterface):
         print_attempt('%s: %s : "%s"' % (colour_addr(self.addr, self.port), escape_text(username), escape_text(password)))
         self.wrapper.lock.acquire()
         try:
-            with open(LOGFILE,"a") as logfile_handle:
+            # Captured passwords may be real ones, so only the owner may read the log.
+            fd = os.open(LOGFILE, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
+            with os.fdopen(fd, "a", newline='') as logfile_handle:
                 writer = csv.writer(logfile_handle)
                 writer.writerow([int(time.time()), self.addr, self.port, csv_safe(username), csv_safe(password)])
         finally:
@@ -222,6 +224,14 @@ class HoneyPotWrapper:
             good = False
 
         self.lock = threading.Lock()
+
+        # os.open only applies 0600 to new files, so point out a pre-existing loose one.
+        try:
+            mode = os.stat(LOGFILE).st_mode
+            if mode & (stat.S_IRWXG | stat.S_IRWXO):
+                print_notice('Log file "%s" is accessible to other users (mode %s). Consider: chmod 600 %s' % (LOGFILE, oct(stat.S_IMODE(mode)), LOGFILE))
+        except OSError:
+            pass
 
         # Connection tracking, guarded by its own lock.
         self.conn_lock = threading.Lock()
