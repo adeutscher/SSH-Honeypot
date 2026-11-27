@@ -10,7 +10,7 @@ if sys.version_info.major == 2 :
 
 #generate keys with 'ssh-keygen -t rsa -m pem -f server.key'
 SSH_PORT = 2222
-LOGFILE = 'logins.txt' # File to log the user:password combinations to
+LOGFILE = 'logins.csv' # File to log the user:password combinations to
 HOST_KEY_PATH = 'server.key'
 
 def _print_message(header_colour, header_text, message, stderr=False):

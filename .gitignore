@@ -5,6 +5,7 @@
 
 ### Project ###
 logins.txt
+logins.csv
 server.key
 server.pub
 server.key.pub

@@ -19,9 +19,9 @@ This tool is a simple SSH server in Python which logs all username/password comb
 ## Configuration
 
 * To change the ssh port, edit ```SSH_PORT = 2222```
-* To change the logfile name, edit ```LOGFILE = 'logins.txt'```
+* To change the logfile name, edit ```LOGFILE = 'logins.csv'```
 
-You should use iptables to redirect the SSH traffic from port 22 to 2222 instead of running the script with root privileges. 
+You should use iptables to redirect the SSH traffic from port 22 to 2222 instead of running the script with root privileges.
 
 ```/sbin/iptables -A PREROUTING -t nat -p tcp --dport 22 -j REDIRECT --to-port 2222```
 
