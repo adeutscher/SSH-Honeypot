@@ -30,6 +30,14 @@ def colour_addr(ip, port, host=None):
 
 def colour_blue(text): return colour_text(text, COLOUR_BLUE) # Lazy shorthand
 
+def escape_text(value):
+    # Make attacker-supplied text safe to print to a terminal.
+    # Non-printable characters (control codes, ANSI/OSC escapes, bidi overrides, etc)
+    #   are replaced with their backslash-escaped form.
+    if isinstance(value, bytes):
+        value = value.decode('utf-8', 'backslashreplace')
+    return ''.join(c if c.isprintable() else repr(c)[1:-1] for c in value)
+
 def colour_text(text, colour = None):
     if not colour:
         colour = COLOUR_BOLD
@@ -142,7 +150,7 @@ class SSHServerHandler (paramiko.ServerInterface):
         return 'password'
 
     def log_attempt(self, username, password):
-        print_attempt('%s: %s : "%s"' % (colour_addr(self.addr, self.port), username, password))
+        print_attempt('%s: %s : "%s"' % (colour_addr(self.addr, self.port), escape_text(username), escape_text(password)))
         self.wrapper.lock.acquire()
         try:
             with open(LOGFILE,"a") as logfile_handle:
