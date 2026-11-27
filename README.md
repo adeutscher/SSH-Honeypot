@@ -6,13 +6,12 @@ This tool is a simple SSH server in Python which logs all username/password comb
 ## Requirements
 
 * ssh-keygen
-* python (2.7 or 3.0)
-* python-setuptools
+* python 3
 * (iptables)
 
 ## Installation
 
-* You need to install the ```paramiko``` module. (e.g. ```sudo easy_install paramiko```)
+* Install the dependencies, ideally in a virtualenv: ```pip install -r requirements.txt```
 * Clone the repository. ```git clone https://github.com/internetwache/SSH-Honeypot.git``` and switch into the directory ```cd SSH-Honeypot```
 * Generate the keypair: ```ssh-keygen -t rsa -m pem -f server.key``` and rename the server.key.pub to server.pub (```mv server.key.pub server.pub```)
 
