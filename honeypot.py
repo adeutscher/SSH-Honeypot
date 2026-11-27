@@ -83,6 +83,8 @@ class ArgWrapper(object):
     def __init__(self):
         # Set defaults
         self.port = SSH_PORT
+        self.bind = '0.0.0.0'
+        self.family = socket.AF_INET
         self.delay = 2
         self.version = 'OpenSSH_8.1'
         self.para_log = False
@@ -107,7 +109,7 @@ class ArgWrapper(object):
         good = True
 
         try:
-            options, operands = getopt.gnu_getopt(args,'a:c:d:hi:lp:s:t:')
+            options, operands = getopt.gnu_getopt(args,'a:b:c:d:hi:lp:s:t:')
 
             for opt, value in options:
 
@@ -115,6 +117,22 @@ class ArgWrapper(object):
                     number = self._parse_positive_int(value, 'attempt limit')
                     if number is None: good = False
                     else: self.max_attempts = number
+
+                elif opt == '-b':
+                    family = None
+                    for candidate in (socket.AF_INET, socket.AF_INET6):
+                        try:
+                            socket.inet_pton(candidate, value)
+                            family = candidate
+                            break
+                        except (OSError, ValueError):
+                            pass
+                    if family is None:
+                        print_error('Invalid bind address (must be an IPv4 or IPv6 address): %s' % value)
+                        good = False
+                    else:
+                        self.bind = value
+                        self.family = family
 
                 elif opt == '-c':
                     number = self._parse_positive_int(value, 'connection limit')
@@ -133,7 +151,7 @@ class ArgWrapper(object):
 
                 elif opt == '-h':
 
-                    print('Usage: ./honeypot.py [-a max-attempts] [-c max-connections] [-d delay-seconds] [-h] [-i max-per-ip] [-l] [-p port] [-s version] [-t max-lifetime-seconds]')
+                    print('Usage: ./honeypot.py [-a max-attempts] [-b bind-address] [-c max-connections] [-d delay-seconds] [-h] [-i max-per-ip] [-l] [-p port] [-s version] [-t max-lifetime-seconds]')
                     exit(0)
 
                 elif opt == '-i':
@@ -297,6 +315,7 @@ class HoneyPotWrapper:
     def run(self):
 
         # Announce options
+        print_notice('Bind Address: %s' % self.args.bind)
         print_notice('Port: %d' % self.args.port)
         print_notice('Fail Delay: %0.2fs' % self.args.delay)
         print_notice('Attempts Per Connection: %d' % self.args.max_attempts)
@@ -305,9 +324,9 @@ class HoneyPotWrapper:
 
         try:
 
-            server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            server_socket = socket.socket(self.args.family, socket.SOCK_STREAM)
             server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            server_socket.bind(('', self.args.port))
+            server_socket.bind((self.args.bind, self.args.port))
             server_socket.listen(100)
 
             if self.args.para_log:
